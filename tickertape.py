@@ -54,6 +54,8 @@ def main():
 
     spi = SPI(1, baudrate=10_000_000, polarity=0, phase=0)
     display = max7219.Matrix8x8(spi, cs=Pin(15), num=NUM_SEGMENTS, extended=True)
+    display.brightness(0)
+    
     tickertape = TickerTape(display, NUM_SEGMENTS)
     tickertape.start()
 
