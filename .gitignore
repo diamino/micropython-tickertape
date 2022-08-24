@@ -3,3 +3,7 @@ pymakr.conf
 
 # VS Code
 .vscode/
+
+# Micropython startup files
+boot.py
+main.py
