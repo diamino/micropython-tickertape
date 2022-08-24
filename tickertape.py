@@ -24,17 +24,19 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 import time
+import machine
 
 class TickerTape:
 
-    def __init__(self, display, num_segments, delay=0.1, inverse=False):
+    def __init__(self, display, num_segments, delay=0.1, inverse=False, timer=machine.Timer(-1)):
         self.display = display
         self.num_segments = num_segments
         self.delay = delay
         self.inverse = inverse
         self.text = "Hello World!"
+        self.timer = timer
 
-    def start(self):
+    def scroll(self):
         while True:
             scrolltext = ((self.num_segments + 1) * ' ') + self.text
             for i in range(len(scrolltext)-1):
@@ -42,22 +44,58 @@ class TickerTape:
                 self.display.text(scrolltext[i:i+self.num_segments+2], 0 ,1, not self.inverse)
                 self.display.show()
                 for _ in range(8):
-                    time.sleep(self.delay)
                     self.display.scroll(-1,0)
                     self.display.show()
+                    yield
+
+    def start(self):
+        self.gen = self.scroll()
+        self.timer.init(period=int(self.delay * 1000), mode=machine.Timer.PERIODIC, callback=self._advance)
+
+    def stop(self):
+        if self.timer:
+            self.timer.deinit()
+
+    def _advance(self, t):
+        next(self.gen)
 
 def main():
     from machine import Pin, SPI
+    import sys
     import max7219
 
     NUM_SEGMENTS = 4
 
-    spi = SPI(1, baudrate=10_000_000, polarity=0, phase=0)
-    display = max7219.Matrix8x8(spi, cs=Pin(15), num=NUM_SEGMENTS, extended=True)
+    ## RP2 (Pico (W))
+    if sys.platform == 'rp2': # RP2 (Pico (W))
+        SPI_DEV = 1
+        SPI_MOSI = Pin(11)
+        SPI_SCK = Pin(10)
+        SPI_CS = Pin(9)
+        timer = machine.Timer(-1)
+    elif sys.platform == 'esp32': # ESP32
+        SPI_DEV = 1
+        SPI_MOSI = Pin(2)
+        SPI_SCK = Pin(4)
+        SPI_CS = Pin(5)
+        timer = machine.Timer(1)
+    elif sys.platform == 'esp8266': # ESP8266 (NodeMCU)
+        SPI_DEV = 1
+        SPI_MOSI = Pin(13) 
+        SPI_SCK = Pin(14)
+        SPI_CS = Pin(15)
+        timer = machine.Timer(-1)
+
+    spi = SPI(SPI_DEV, baudrate=10_000_000, sck=SPI_SCK, mosi=SPI_MOSI, polarity=0, phase=0)
+    display = max7219.Matrix8x8(spi, cs=SPI_CS, num=NUM_SEGMENTS, extended=True)
     display.brightness(0)
     
-    tickertape = TickerTape(display, NUM_SEGMENTS)
+    tickertape = TickerTape(display, NUM_SEGMENTS, timer=timer)
     tickertape.start()
+    time.sleep(10)
+    tickertape.text = "Bye World!"
+    time.sleep(10)
+    tickertape.stop()
 
 if __name__ == '__main__':
     main()
